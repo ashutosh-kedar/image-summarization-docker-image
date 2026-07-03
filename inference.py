@@ -46,13 +46,50 @@ def load_model():
         model = Qwen2VLForConditionalGeneration.from_pretrained(
             MODEL_ID,
             torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+            attn_implementation="sdpa",
         ).to(device)
 
         model.eval()
 
-        processor = AutoProcessor.from_pretrained(MODEL_ID)
+        # Cap visual tokens per image: without this, a full-res phone photo
+        # becomes thousands of tokens and prefill alone can exceed the
+        # 60s InvokeEndpoint limit on a T4.
+        processor = AutoProcessor.from_pretrained(
+            MODEL_ID,
+            min_pixels=int(os.getenv("MIN_PIXELS", 256 * 28 * 28)),
+            max_pixels=int(os.getenv("MAX_PIXELS", 1280 * 28 * 28)),
+        )
 
-        logger.info("Model loaded on %s", device)
+        logger.info("Model loaded on %s, warming up...", device)
+        _warmup(device)
+        logger.info("Warm-up complete")
+
+
+def _warmup(device: str):
+    """Run one tiny generation so CUDA kernel init / memory allocation
+    happens during startup (covered by the health-check timeout) instead
+    of on the first real user request."""
+    try:
+        dummy_image = Image.new("RGB", (224, 224), color=(128, 128, 128))
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "image", "image": dummy_image},
+                {"type": "text", "text": "Hi"},
+            ],
+        }]
+        text = processor.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+        image_inputs, video_inputs = process_vision_info(messages)
+        inputs = processor(
+            text=[text], images=image_inputs, videos=video_inputs,
+            return_tensors="pt", padding=True,
+        ).to(device)
+        with torch.inference_mode():
+            model.generate(**inputs, max_new_tokens=8)
+    except Exception:
+        logger.exception("Warm-up failed (continuing anyway)")
 
 
 def fetch_images_from_s3(user_id: str, image_names: list) -> list:
@@ -146,7 +183,7 @@ def predict(payload: dict) -> dict:
 
     # Clamp generation length to the server-side cap
     max_new_tokens = min(
-        int(payload.get("max_new_tokens", 512)),
+        int(payload.get("max_new_tokens", 256)),
         MAX_NEW_TOKENS_CAP,
     )
 
@@ -155,9 +192,15 @@ def predict(payload: dict) -> dict:
         gen_kwargs["do_sample"] = True
         gen_kwargs["temperature"] = float(payload.get("temperature", 0.2))
 
+    import time
+    start = time.time()
     with _generate_lock:
         with torch.inference_mode():
             output = model.generate(**inputs, **gen_kwargs)
+    logger.info(
+        "Generation took %.1fs (input tokens=%d, max_new_tokens=%d, images=%d)",
+        time.time() - start, inputs.input_ids.shape[1], max_new_tokens, len(images),
+    )
 
     trimmed = [
         out[len(inp):] for inp, out in zip(inputs.input_ids, output)
