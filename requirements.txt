@@ -2,7 +2,7 @@ torch
 torchvision
 transformers==4.52.4
 accelerate>=0.31.0
-qwen-vl-utils==0.0.8
+qwen-vl-utils
 Pillow
 fastapi
 uvicorn[standard]

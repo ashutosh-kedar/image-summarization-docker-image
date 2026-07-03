@@ -4,7 +4,7 @@ from typing import List
 
 from inference import predict
 
-app = FastAPI(title="Qwen2-VL SageMaker")
+app = FastAPI(title="Qwen2-VL SageMaker API")
 
 
 class InferenceRequest(BaseModel):
@@ -22,12 +22,13 @@ def ping():
 
 @app.post("/invocations")
 def invocations(request: InferenceRequest):
-
     try:
         return predict(request.model_dump())
-
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e),
-        )
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ✅ IMPORTANT: REQUIRED for SageMaker container startup
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080)
