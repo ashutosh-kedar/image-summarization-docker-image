@@ -17,5 +17,4 @@ COPY app.py .
 
 EXPOSE 8080
 
-# IMPORTANT: explicit python entrypoint
-CMD ["python", "app.py"]
+ENTRYPOINT ["python", "app.py"]

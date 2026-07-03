@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
 from contextlib import asynccontextmanager
-from inference import predict
+from inference import predict, load_model
 
 @asynccontextmanager
 async def lifespan(app):
