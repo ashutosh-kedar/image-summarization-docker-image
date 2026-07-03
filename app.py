@@ -1,10 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
-
+from contextlib import asynccontextmanager
 from inference import predict
 
-app = FastAPI(title="Qwen2-VL SageMaker API")
+@asynccontextmanager
+async def lifespan(app):
+    load_model()   # download + load before serving traffic
+    yield
+
+app = FastAPI(title="Qwen2-VL SageMaker API", lifespan=lifespan)
 
 
 class InferenceRequest(BaseModel):

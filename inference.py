@@ -86,12 +86,11 @@ def predict(payload):
     ).to(device)
 
     with torch.inference_mode():
-        output = model.generate(
-            **inputs,
-            max_new_tokens=payload.get("max_new_tokens", 512),
-            temperature=payload.get("temperature", 0.2),
-            do_sample=payload.get("do_sample", False),
-        )
+        gen_kwargs = {"max_new_tokens": payload.get("max_new_tokens", 512)}
+        if payload.get("do_sample", False):
+            gen_kwargs["temperature"] = payload.get("temperature", 0.2)
+            gen_kwargs["do_sample"] = True
+        output = model.generate(**inputs, **gen_kwargs)
 
     trimmed = [
         out[len(inp):] for inp, out in zip(inputs.input_ids, output)
