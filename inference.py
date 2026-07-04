@@ -40,8 +40,20 @@ def load_model():
 
     if model is None:
         logger.info("Loading model: %s", MODEL_ID)
+        logger.info(
+            "torch=%s | cuda_available=%s | cuda_version=%s",
+            torch.__version__,
+            torch.cuda.is_available(),
+            torch.version.cuda,
+        )
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
+        if device == "cpu":
+            logger.error(
+                "CUDA NOT AVAILABLE — falling back to CPU. "
+                "Inference will be ~10x slower and will time out. "
+                "Check torch/driver compatibility in the image."
+            )
 
         model = Qwen2VLForConditionalGeneration.from_pretrained(
             MODEL_ID,

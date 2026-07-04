@@ -1,5 +1,8 @@
-torch
-torchvision
+# NOTE: torch and torchvision are intentionally NOT listed here.
+# The base image (pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime) already
+# provides CUDA-enabled builds. Listing them unpinned lets pip upgrade
+# torch to a wheel that may not work with the host GPU driver, silently
+# falling back to CPU inference.
 transformers==4.52.4
 accelerate>=0.31.0
 qwen-vl-utils
